@@ -4,7 +4,7 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--fs:30px;--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px)}
-html,body{height:100%;height:100dvh;width:100%;background:#000;color:#fff;font-family:-apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;overflow:hidden}
+html,body{height:100%;height:100dvh;width:100%;background:#000;color:#fff;font-family:-apple-system,"PingFang SC","Noto Sans CJK SC","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;overflow:hidden}
 #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
 #vbox{position:relative;width:100%;height:100%;overflow:hidden;background:#111}
 video{width:100%;height:100%;object-fit:cover;display:block}
@@ -31,6 +31,7 @@ select{font-size:14px;padding:8px;border-radius:8px;background:#333;max-width:10
 #msg{position:fixed;top:50%;width:100%;text-align:center;z-index:4;font-size:20px;pointer-events:none;padding:0 20px}
 .desk-only{display:none}
 /* 桌面：宽屏 + 鼠标 */
+#introB{display:none}@media (max-height:500px){#introB{display:inline-block}}
 @media (min-width:900px) and (hover:hover) and (pointer:fine){
  .desk-only{display:inline-flex}#keys{display:block;width:100%;text-align:center}
  #stage{bottom:var(--barh,170px)}
@@ -56,6 +57,15 @@ select{font-size:14px;padding:8px;border-radius:8px;background:#333;max-width:10
 #intro{font-size:14px;line-height:1.5;background:rgba(30,60,90,.85);border-radius:10px;padding:8px 10px;margin-bottom:6px}
 #intro b{color:#ffd23f}#intro button{font-size:12px;padding:4px 8px;border-radius:6px;margin-left:6px}
 body.recing #intro,body.recing #sbar{display:none}
+button,select,input{font-family:inherit}
+#prompt{bottom:var(--barh,170px);display:flex;flex-direction:column;overflow:hidden}
+#pin{width:100%;flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+#sbar,#intro,#hint,#idx,.side{flex:0 0 auto}
+#intro{max-height:32vh;overflow-y:auto}
+#cur{flex:0 1 auto;min-height:0;overflow:hidden;word-break:normal;line-break:strict}
+#msg{position:static;grid-column:1/-1;font-size:15px;padding:0;width:auto}#msg:empty{display:none}
+@media (max-height:500px){#intro.mini,#prev{display:none}#prompt{padding-top:calc(6px + var(--sat));padding-bottom:4px}#cur{margin:2px 0}#hint{margin-bottom:0}#bar{padding-top:4px}#barin{gap:5px}button{padding:9px 4px}.side{-webkit-line-clamp:1}#sbar .tab{font-size:12px;padding:4px 8px}#intro{font-size:12px;max-height:22vh}#tools{gap:4px 8px}#upbox label.big{font-size:12px;padding:4px 10px}#tools button{padding:5px 9px;font-size:12px}}
+@media (max-width:480px){#tools{font-size:13px;gap:4px 8px}#tools button{padding:6px 9px;font-size:13px}button{padding:13px 4px}}
 </style></head><body class="crop">
 <div id="stage"><div id="vbox"><video id="v" class="mir" autoplay playsinline muted></video></div></div>
 <div id="prompt"><div id="pin"><div id="sbar"></div><div id="intro"></div><div class="side" id="prev"></div><div id="hint"></div><div id="cur"></div><div class="side" id="nextS"></div><div id="idx"></div></div></div>
@@ -110,27 +120,30 @@ let i=0,stream,rec,chunks=[],t0=0,markers=[],tick,autoT,wake,raf,outMode='';
 const recording=()=>rec&&rec.state==='recording';
 // 字号
 let fs=+localStorage.getItem('tp_fs')||(innerWidth>=900?40:30);
-function setFs(v){fs=Math.max(16,Math.min(80,v));document.documentElement.style.setProperty('--fs',fs+'px');localStorage.setItem('tp_fs',fs);}
+function setFs(v){fs=Math.max(16,Math.min(72,v));document.documentElement.style.setProperty('--fs',fs+'px');localStorage.setItem('tp_fs',fs);if(window.fitCur)fitCur();}
 setFs(fs);$('fsm').onclick=()=>setFs(fs-2);$('fsp').onclick=()=>setFs(fs+2);
 // 开关持久化
 for(const k of['mir','crop','auto']){const s=localStorage.getItem('tp_'+k);if(s!==null)$(k).checked=s==='1';$(k).addEventListener('change',()=>{localStorage.setItem('tp_'+k,$(k).checked?'1':'0');apply();});}
 function apply(){$('v').classList.toggle('mir',$('mir').checked);document.body.classList.toggle('crop',$('crop').checked);schedAuto();fitBar();}
-function fitBar(){document.documentElement.style.setProperty('--barh',$('bar').offsetHeight+'px');}
+function fitBar(){document.documentElement.style.setProperty('--barh',$('bar').offsetHeight+'px');fitCur();}
+function fitCur(){const c=$('cur'),p=$('prompt');if(!c)return;let f=fs;c.style.fontSize=f+'px';while(f>16&&(p.scrollHeight>p.clientHeight+1||c.scrollHeight>c.clientHeight+1)){f-=2;c.style.fontSize=f+'px';}}
+new ResizeObserver(()=>fitBar()).observe(document.getElementById('bar'));
 addEventListener('resize',fitBar);
 function render(){$('prev').textContent=i>0?plain(S[i-1][0]):'';$('nextS').textContent=i<S.length-1?plain(S[i+1][0]):'（结束）';
-$('cur').innerHTML=fmt(S[i][0]);$('hint').textContent='语速：'+S[i][1]+'　情绪：'+S[i][2];$('idx').textContent=(i+1)+' / '+S.length;schedAuto();}
+$('cur').innerHTML=fmt(S[i][0]);$('hint').textContent='语速：'+S[i][1]+'　情绪：'+S[i][2];$('idx').textContent=(i+1)+' / '+S.length;fitCur();schedAuto();}
 // ===== 脚本切换 =====
 async function loadIndex(){try{const j=await (await fetch('/scripts/index.json',{cache:'no-store'})).json();SLIST=j.scripts;return j.default;}catch(e){return 'koubo';}}
-function tabs(){$('sbar').innerHTML=SLIST.map(s=>`<button class="tab${s.id===SC.id?' on':''}" id="tab-${s.id}" data-id="${s.id}">${s.title}</button>`).join('');
- $('sbar').querySelectorAll('.tab').forEach(b=>b.onclick=()=>{if(recording()){alert('录制中不能切换脚本，请先停止录制');return;}loadScript(b.dataset.id);});}
-function intro(open){const el=$('intro');if(!open){el.innerHTML=`<b>${SC.title}</b><button id="introT">看说明</button>`;}
+function tabs(){$('sbar').innerHTML=SLIST.map(s=>`<button class="tab${s.id===SC.id?' on':''}" id="tab-${s.id}" data-id="${s.id}">${s.title}</button>`).join('')+'<button class="tab" id="introB">📖 说明</button>';
+ $('introB').onclick=()=>intro($('intro').classList.contains('mini'));
+ $('sbar').querySelectorAll('.tab[data-id]').forEach(b=>b.onclick=()=>{if(recording()){alert('录制中不能切换脚本，请先停止录制');return;}loadScript(b.dataset.id);});}
+function intro(open){const el=$('intro');el.classList.toggle('mini',!open);if(!open){el.innerHTML=`<b>${SC.title}</b><button id="introT">看说明</button>`;}
  else el.innerHTML=`<b>📌 ${SC.title}</b>：${SC.purpose}<br>👉 ${SC.instructions}<br>开始：点下方红色「开始录制」，读完全部点「停止录制」，视频会自动上传。<button id="introT">收起</button>`;
- $('introT').onclick=()=>intro(!open);}
+ $('introT').onclick=()=>intro(!open);fitCur();}
 async function loadScript(id){try{const r=await fetch('/scripts/'+encodeURIComponent(id)+'.json',{cache:'no-store'});if(!r.ok)throw r.status;SC=await r.json();}
  catch(e){if(id!=='koubo')return loadScript('koubo');return;}
  S=SC.sentences.map(s=>[s.text,s.speed,s.tone]);i=0;localStorage.setItem('tp_script',SC.id);
  const u=new URL(location.href);u.searchParams.set('script',SC.id);history.replaceState(null,'',u);
- document.body.dataset.script=SC.id;tabs();intro(true);render();fitBar();}
+ document.body.dataset.script=SC.id;tabs();intro(innerHeight>=760);render();fitBar();}
 const now=()=>recording()?+((performance.now()-t0)/1000).toFixed(2):null;
 function mark(a){markers.push({t:now(),sentence:i+1,action:a,text:plain(S[i][0]),script:SKEY(),wall:new Date().toISOString()});}
 function go(d,a){const n=i+d;if(n<0||n>=S.length)return;i=n;mark(a);render();}
@@ -173,10 +186,10 @@ const portrait=v.videoHeight>v.videoWidth&&Math.abs(v.videoWidth/v.videoHeight-9
 if($('crop').checked&&!portrait){const cs=cropStream();if(cs){src=cs;outMode='9:16 canvas 居中裁剪 '+cs._res;}else outMode='原生（浏览器不支持 canvas 录制）';}
 else outMode='原生 '+v.videoWidth+'x'+v.videoHeight;
 rec=new MediaRecorder(src,Object.assign({videoBitsPerSecond:8e6,audioBitsPerSecond:128000},m?{mimeType:m}:{}));
-sess=new Date().toISOString().replace(/[-:.TZ]/g,'').slice(0,14)+'-'+SKEY()+'-'+Math.random().toString(36).slice(2,6);document.body.classList.add('recing');
+sess=new Date().toISOString().replace(/[-:.TZ]/g,'').slice(0,14)+'-'+SKEY()+'-'+Math.random().toString(36).slice(2,6);document.body.classList.add('recing');fitCur();
 recExt=(m||'').includes('mp4')?'mp4':'webm';seq=0;upQ=[];upBytes=0;totBytes=0;setUp('');
 rec.ondataavailable=e=>{if(!e.data.size)return;chunks.push(e.data);upQ.push({seq:seq++,blob:e.data});totBytes+=e.data.size;pump();};
-rec.onstop=()=>{document.body.classList.remove('recing');cancelAnimationFrame(raf);clearInterval(tick);clearTimeout(autoT);$('rec').textContent='开始录制';$('rec').classList.remove('on');
+rec.onstop=()=>{document.body.classList.remove('recing');fitCur();cancelAnimationFrame(raf);clearInterval(tick);clearTimeout(autoT);$('rec').textContent='开始录制';$('rec').classList.remove('on');
 const type=rec.mimeType||m||'video/webm',ext=type.includes('mp4')?'mp4':'webm',ts=new Date().toISOString().replace(/[:.]/g,'-');
 const blob=new Blob(chunks,{type});$('dv').href=URL.createObjectURL(blob);$('dv').download='aroll-'+ts+'.'+ext;
 $('dinfo').textContent=outMode+' · '+(blob.size/1048576).toFixed(1)+' MB · '+type;analyzeRec(blob);
@@ -255,5 +268,5 @@ $('lstc').innerHTML=j.recordings.length?j.recordings.map(r=>`<div style="border-
 r.files.map(f=>`<a href="${f.downloadUrl}" style="color:#6cf">${f.name}</a> <span style="opacity:.6">${(f.bytes/1048576).toFixed(2)} MB</span>`).join('<br>')+'</div>').join(''):'暂无录制';}
 catch(e){$('lstc').textContent='加载失败：'+e;}};
 if(!KEY)$('msg').textContent='⚠️ 链接缺少 ?k= 访问密钥，录制后无法自动上传（仍可本地下载）';
-apply();render();listDev();loadIndex().then(d=>loadScript(new URLSearchParams(location.search).get('script')||localStorage.getItem('tp_script')||d));
+$('barin').prepend($('msg'));apply();render();listDev();loadIndex().then(d=>loadScript(new URLSearchParams(location.search).get('script')||localStorage.getItem('tp_script')||d));
 </script></body></html>

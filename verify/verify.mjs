@@ -10,7 +10,49 @@ const views = { mobile: devices['Pixel 7'], desktop: { viewport: { width: 1440, 
 const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
 let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail++; };
 const created = [];
+const ART = process.env.ART || 'verify/artifacts'; (await import('fs')).mkdirSync(ART, { recursive: true });
+const phones = { 'iphone-se': [375, 667], 'iphone-14': [390, 844], 'pixel-7': [412, 915], 'android-small': [360, 740] };
+// 手机文字显示检查：返回问题列表
+const textIssues = () => {
+  const out = [], de = document.documentElement, W = innerWidth, H = innerHeight, cur = document.getElementById('cur');
+  if (de.scrollWidth > de.clientWidth + 1 || document.body.scrollWidth > W + 1) out.push(`横向溢出 scrollWidth=${de.scrollWidth}>${de.clientWidth}`);
+  const r = cur.getBoundingClientRect();
+  if (r.top < 0 || r.left < 0 || r.bottom > H + 1 || r.right > W + 1 || r.height < 10) out.push(`字幕超出视口 ${[r.left, r.top, r.right, r.bottom].map(Math.round)}`);
+  const fs = parseFloat(getComputedStyle(cur).fontSize); if (fs < 16 || fs > 72) out.push(`字号不合适 ${fs}px`);
+  if (cur.scrollHeight > cur.clientHeight + 2 || cur.scrollWidth > cur.clientWidth + 2) out.push(`字幕被裁切 scroll=${cur.scrollWidth}x${cur.scrollHeight} client=${cur.clientWidth}x${cur.clientHeight}`);
+  const rg = document.createRange(); rg.selectNodeContents(cur); let bad = 0, n = 0;
+  for (const rr of rg.getClientRects()) for (const fx of [.1, .5, .9]) { const x = rr.left + rr.width * fx, y = rr.top + rr.height / 2; n++;
+    const el = document.elementFromPoint(x, y); if (!el || !cur.contains(el)) { bad++; if (bad < 3) out.push(`字幕被遮挡 @${Math.round(x)},${Math.round(y)} by ${el ? el.tagName + '#' + el.id : 'null'}`); } }
+  const c = document.createElement('canvas').getContext('2d'); c.font = getComputedStyle(cur).font; const tofu = c.measureText('\u{10FFFD}').width;
+  const cjk = [...cur.textContent].filter(ch => /[\u4e00-\u9fff]/.test(ch)); const t = cjk.filter(ch => Math.abs(c.measureText(ch).width - tofu) < .01 && document.fonts && !document.fonts.check('16px ' + getComputedStyle(cur).fontFamily, ch));
+  if (cjk.length && t.length) out.push(`疑似豆腐块 ${t.slice(0, 5).join('')}`);
+  return out;
+};
 try {
+  for (const [pn, [pw, ph]] of Object.entries(phones)) for (const orient of ['portrait', 'landscape']) {
+    const [W, H] = orient === 'portrait' ? [pw, ph] : [ph, pw];
+    const ctx = await browser.newContext({ viewport: { width: W, height: H }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, permissions: ['camera', 'microphone'] });
+    for (const id of ids) {
+      const page = await ctx.newPage(); await page.goto(`${BASE}/?k=${KEY}&script=${id}`); await page.waitForSelector(`#tab-${id}.on`);
+      const sc = await (await fetch(`${BASE}/scripts/${id}.json`)).json();
+      for (const mode of ['idle', 'recording']) {
+        if (mode === 'recording') await page.evaluate(() => { document.body.classList.add('recing'); if (window.fitCur) fitCur(); }); // 模拟录制中布局（不上传）
+        const issues = [];
+        await page.evaluate(() => { try { i = 0; render(); } catch (e) {} });
+        for (let n = 0; n < sc.sentences.length; n++) {
+          await page.waitForTimeout(30);
+          for (const x of await page.evaluate(textIssues)) issues.push(`句${n + 1}: ${x}`);
+          if (n === 0 || n === 6) await page.screenshot({ path: `${ART}/${pn}-${orient}-${id}-${mode}-s${n + 1}.png` });
+          await page.click('#next', { force: true });
+        }
+        ok(!issues.length, `[文字显示 ${pn} ${W}x${H} ${orient}/${id}/${mode}] ${issues.length ? issues.slice(0, 4).join(' | ') + (issues.length > 4 ? ` …共${issues.length}项` : '') : 'OK'}`);
+      }
+      await page.close();
+    }
+    await ctx.close();
+  }
+  if (process.env.TEXT_ONLY) throw new Error('TEXT_ONLY');
+
   for (const [vname, dev] of Object.entries(views)) {
     const ctx = await browser.newContext({ ...dev, permissions: ['camera', 'microphone'] });
     for (const id of ids) {
@@ -18,7 +60,7 @@ try {
       const page = await ctx.newPage();
       await page.goto(`${BASE}/?k=${KEY}&script=${id}`);
       await page.waitForSelector(`#tab-${id}.on`);
-      ok(await page.locator('#sbar .tab').count() === ids.length, `[${vname}/${id}] ${ids.length} 个脚本标签可见`);
+      ok(await page.locator('#sbar .tab[data-id]').count() === ids.length, `[${vname}/${id}] ${ids.length} 个脚本标签可见`);
       ok((await page.textContent('#intro')).includes(sc.instructions.slice(0, 10)), `[${vname}/${id}] 顶部说明显示`);
       // 字幕逐句
       let allOk = true;
@@ -49,7 +91,7 @@ try {
     }
     await ctx.close();
   }
-} catch (e) { ok(false, 'exception ' + e.message); }
+} catch (e) { if (e.message !== 'TEXT_ONLY') ok(false, 'exception ' + e.message); }
 finally {
   for (const s of created) { const d = await (await fetch(`${BASE}/api/recordings?k=${KEY}&session=${s}`, { method: 'DELETE' })).json(); console.log('cleanup', s, d); }
   await browser.close();
