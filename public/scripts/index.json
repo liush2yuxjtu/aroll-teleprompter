@@ -1,0 +1,17 @@
+{
+ "default": "koubo",
+ "scripts": [
+  {
+   "id": "koubo",
+   "title": "v1 口播：收藏几百个 AI 教程"
+  },
+  {
+   "id": "chat20",
+   "title": "v2 闲聊 20 秒"
+  },
+  {
+   "id": "voice-sample",
+   "title": "v3 声音样本"
+  }
+ ]
+}
