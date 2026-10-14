@@ -1,0 +1,39 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>选一个声音版本</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;background:#0f1115;color:#e8e8ea;line-height:1.55}
+main{max-width:640px;margin:0 auto;padding:18px 14px 90px}h1{font-size:22px;margin:4px 0}p.lead{color:#a8acb6;font-size:14px;margin:4px 0 16px}
+.card{background:#181b22;border:2px solid #262a33;border-radius:14px;padding:14px;margin:12px 0;transition:border-color .2s}
+.card.sel{border-color:#34c38f;background:#14231d}.top{display:flex;align-items:center;gap:10px}.tag{font-weight:700;font-size:20px;width:34px;height:34px;border-radius:9px;background:#2b3040;display:grid;place-items:center}
+.name{font-size:18px;font-weight:600}.final{font-size:12px;background:#d4a017;color:#111;border-radius:6px;padding:1px 6px;margin-left:4px}
+.desc{color:#c5c8d0;font-size:14px;margin:8px 0}audio{width:100%;margin:6px 0}
+.m{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}.m span{font-size:12px;background:#222733;border-radius:6px;padding:2px 7px;color:#b9bdc8}
+button{width:100%;font-size:16px;padding:12px;border:0;border-radius:10px;background:#3a64f5;color:#fff;font-weight:600}
+.card.sel button{background:#34c38f}#msg{position:fixed;left:0;right:0;bottom:0;background:#1d2230;padding:12px 16px;text-align:center;font-size:15px;display:none}
+textarea{width:100%;background:#181b22;color:#e8e8ea;border:1px solid #2b3040;border-radius:10px;padding:10px;font-size:15px;min-height:60px}
+</style></head><body><main>
+<h1>选一个口播声音版本</h1>
+<p class="lead">同一段文案（前 4 句），都是你自己的音色克隆。戴耳机听完后，点「就选这个」。可以在下面留一句话。</p>
+<div id="list"></div>
+<textarea id="note" placeholder="（可选）说说为什么，或者还想改哪里"></textarea>
+</main><div id="msg"></div>
+<script>
+const V=[
+{id:'A',name:'快节奏抓人',desc:'像爆款口播：语速最快、几乎不停顿，一句接一句往外抛。',m:['语速 5.6 字/秒','逗号停顿 0/9','音高起伏 6.2 半音','断句：一口气念完（不通过）']},
+{id:'B',name:'沉稳讲解',desc:'像老师讲道理：语调起伏大、句尾下落笃定；但有一处词中停顿（可能是|三个月前）。',m:['语速 4.8 字/秒','逗号停顿 6/9','音高起伏 13.0 半音','句尾下落 −3.6 半音']},
+{id:'C',name:'聊天连贯',desc:'像朋友兴奋地讲干货：断句最自然连贯，语调中等。',m:['语速 5.3 字/秒','逗号停顿 7/9','音高起伏 8.9 半音','句尾下落 −1.3 半音']},
+{id:'D',name:'最终版：C 节奏 + B 语调',final:1,desc:'从 5 条候选中按断句和语调自动挑选，全部校验通过。',m:['语速 4.7 字/秒','逗号停顿 4/9','音高起伏 7.9 半音','句尾下落 −2.1 半音','校验 PASS']}];
+const k=new URLSearchParams(location.search).get('k')||'';
+const list=document.getElementById('list');
+for(const v of V){const d=document.createElement('div');d.className='card';d.id='c'+v.id;
+d.innerHTML=`<div class="top"><div class="tag">${v.id}</div><div class="name">${v.name}${v.final?'<span class="final">推荐</span>':''}</div></div>
+<div class="desc">${v.desc}</div><audio controls preload="none" src="style_${v.id}.mp3"></audio><div class="m">${v.m.map(x=>`<span>${x}</span>`).join('')}</div><button data-id="${v.id}">就选这个</button>`;list.appendChild(d)}
+document.querySelectorAll('audio').forEach(a=>a.addEventListener('play',()=>document.querySelectorAll('audio').forEach(b=>b!==a&&b.pause())));
+const msg=t=>{const m=document.getElementById('msg');m.textContent=t;m.style.display='block'};
+list.addEventListener('click',async e=>{const id=e.target.dataset&&e.target.dataset.id;if(!id)return;
+document.querySelectorAll('.card').forEach(c=>c.classList.toggle('sel',c.id==='c'+id));
+document.querySelectorAll('.card button').forEach(b=>b.textContent=b.dataset.id===id?'✓ 已选这个':'就选这个');
+if(!k){msg('已选 '+id+'（链接缺少 k 参数，未能保存，请直接告诉机器人）');return}
+msg('保存中…');try{const r=await fetch('/api/choice?k='+encodeURIComponent(k),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({choice:id,note:document.getElementById('note').value})});
+msg(r.ok?'✓ 已保存：选择了 '+id+'，机器人可以看到了':'保存失败（'+r.status+'），请直接告诉机器人选了 '+id)}catch(err){msg('网络错误，请直接告诉机器人选了 '+id)}});
+</script></body></html>
