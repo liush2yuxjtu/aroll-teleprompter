@@ -23,7 +23,7 @@ try {
       // 字幕逐句
       let allOk = true;
       for (let n = 0; n < sc.sentences.length; n++) {
-        const cur = (await page.textContent('#cur')).replace(/\s+/g, '');
+        const cur = (await page.textContent('#cur')).replace(/[\s/]+/g, '');
         if (cur !== plain(sc.sentences[n].text).replace(/\s+/g, '') || (await page.textContent('#idx')).trim() !== `${n + 1} / ${sc.sentences.length}`) { allOk = false; console.log('  mismatch', n, cur); }
         await page.click('#next');
       }
