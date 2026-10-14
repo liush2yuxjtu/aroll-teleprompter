@@ -35,3 +35,10 @@ TP_KEY=$(cat /workspace/teleprompter/.tp_key) node verify/verify.mjs      # BASE
 
 ## 部署
 Vercel 项目 `aroll-teleprompter`（team nyn5255-8475s-projects），环境变量 `TP_KEY`、`BLOB_READ_WRITE_TOKEN`。
+
+## 声音版本对比页 / Voice comparison
+`/voices/?k=<TP_KEY>`：4 个口播声音版本（A/B/C/D）试听 + 「就选这个」。选择存入 Blob `choices/`，读取：`GET /api/choice?k=<TP_KEY>` → `.latest.choice`；测试选择用 `"test":true`，`DELETE /api/choice?k=<TP_KEY>&test=1` 清除。
+
+## 部署 / Deploy
+本项目未连 Git 自动部署：用 Vercel MCP `upload_file`（每个文件，sha1+size）→ `create_deployment`（`files` 引用 sha，`target: production`，`project: aroll-teleprompter`）。
+**Vercel MCP: omit teamId (403 bug)** —— 调用时不要传 `teamId` / `slug`，否则返回 403 forbidden；不传则正常。
