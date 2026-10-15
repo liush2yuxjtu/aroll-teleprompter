@@ -10,6 +10,7 @@
 | `koubo` | v1 口播正片：为什么你收藏了几百个 AI 教程，还是不会用 AI？（16 句） |
 | `chat20` | v2 约 20 秒日常闲聊（语气：像跟朋友聊天） |
 | `voice-sample` | v3 声音样本 |
+| `kanbudong` | v4 口播正片：为什么你跟着 AI 教程一做就会，一关就忘？（16 句，后台闲聊口吻） |
 
 脚本放在 `public/scripts/<id>.json`：`{id,title,purpose,instructions,sentences:[{text,plain,speed,tone}]}`，
 `text` 里 `/` 表示停顿、`**词**` 表示重读；`plain` 为纯文本。新增脚本：加一个 json 并在 `public/scripts/index.json` 登记即可。
